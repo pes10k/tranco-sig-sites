@@ -5,10 +5,11 @@ const argParseLib = require('argparse')
 const commandsLib = require('./tranco-sig-sites/commands')
 
 const parser = new argParseLib.ArgumentParser({
-  description: 'Extract useful, significant sites from the Tranco list.'
+  description: 'Extract useful, significant sites from the Tranco list.',
+  formatter_class: argParseLib.ArgumentDefaultsHelpFormatter
 })
 parser.add_argument('file', {
-  help: 'Path to Tracno list, encoded as a CSV file, on disk'
+  help: 'Path to Tranco list, encoded as a CSV file.'
 })
 parser.add_argument('-b', '--bytes', {
   help: 'How large (in bytes) the page\'s content must be to be considered ' +
