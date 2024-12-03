@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+const { version } = require('./package.json')
+
 const argParseLib = require('argparse')
 
 const commandsLib = require('./tranco-sig-sites/commands')
@@ -7,6 +9,10 @@ const commandsLib = require('./tranco-sig-sites/commands')
 const parser = new argParseLib.ArgumentParser({
   description: 'Extract useful, significant sites from the Tranco list.',
   formatter_class: argParseLib.ArgumentDefaultsHelpFormatter
+})
+parser.add_argument('--version', {
+  action: 'version',
+  version
 })
 parser.add_argument('file', {
   help: 'Path to Tranco list, encoded as a CSV file.'
@@ -47,17 +53,27 @@ parser.add_argument('-v', '--visible', {
 })
 parser.add_argument('-o', '--output', {
   help: 'Path to write results to (otherwise, writes to STDIO).',
-  type: argParseLib.FileType('w'),
-  default: process.stdout
+  type: argParseLib.FileType('w')
+})
+parser.add_argument('-q', '--strip-query-params', {
+  help: 'Strip query params from all URLs.',
+  action: argParseLib.BooleanOptionalAction,
+  default: true
 })
 
-const args = parser.parse_args();
+const args = parser.parse_args()
+const outputFile = args.output || process.stdout
 
-(async () => {
-  const numResults = await commandsLib.getTrancoUrlsWithSignificantContent(
-    args.file, args.bytes, args.num, args.num_pages, args.timeout, args.strict,
-    !args.visible, args.output
-  )
-  const isSuccess = numResults >= args.num
-  process.exit(isSuccess ? 0 : 1)
+;(async () => {
+  try {
+    const numResults = await commandsLib.getTrancoUrlsWithSignificantContent(
+      args.file, args.bytes, args.num, args.num_pages, args.timeout,
+      args.strict, !args.visible, args.strip_query_params, outputFile
+    )
+    const isSuccess = numResults >= args.num
+    process.exit(isSuccess ? 0 : 1)
+  } catch (e) {
+    process.stderr.write(e.toString() + '\n')
+    process.exit(1)
+  }
 })()
