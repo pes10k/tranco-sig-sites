@@ -1,5 +1,6 @@
 usage: run.js [-h] [-b BYTES] [-n NUM] [-p NUM_PAGES] [-t TIMEOUT] [-s] [-v]
               [-o OUTPUT]
+              [-q | --strip-query-params | --no-strip-query-params]
               file
 
 Extract useful, significant sites from the Tranco list.
@@ -29,4 +30,5 @@ optional arguments:
                         false)
   -o OUTPUT, --output OUTPUT
                         Path to write results to (otherwise, writes to STDIO).
-                        (default: [object Object])
+  -q, --strip-query-params, --no-strip-query-params
+                        Strip query params from all URLs. (default: true)

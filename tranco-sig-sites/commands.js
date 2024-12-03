@@ -1,5 +1,6 @@
 const scrapeLib = require('./scrape')
 const trancoLib = require('./tranco')
+const urlsLib = require('./urls')
 
 const isPageSignificant = async (minContentSize, timeoutSecs, browser, url) => {
   const rs = await scrapeLib.getPageContentForUrl(
@@ -17,11 +18,17 @@ const isPageSignificant = async (minContentSize, timeoutSecs, browser, url) => {
 }
 
 const getTrancoUrlsWithSignificantContent = async (filepath, contentSize,
-  limit, maxChildPages, timeoutSecs, strict, headless, outputFile) => {
+  limit, maxChildPages, timeoutSecs, strict, headless, stripQueryParams,
+  outputFile) => {
+  const trancoResults = await trancoLib.recordsFromFile(filepath)
+  const processUrl = urlsLib.process.bind(undefined, stripQueryParams)
+
+  // Simple closure so that we don't actually launch the browser until
+  // we've started parsing the tranco result, so that we can more quickly
+  // quit
   const browser = await scrapeLib.launchBrowser(headless)
   const isSigFunc = isPageSignificant.bind(undefined, contentSize, timeoutSecs,
     browser)
-  const trancoResults = await trancoLib.recordsFromFile(filepath)
 
   let numResults = 0
   const possibleSchemes = [
@@ -55,7 +62,9 @@ const getTrancoUrlsWithSignificantContent = async (filepath, contentSize,
       }
       landingPage = rs.page
       siteResult.landing.requestedUrl = possibleLandingUrl
-      siteResult.landing.finalUrl = rs.url
+      siteResult.landing.finalUrlRaw = rs.url
+      siteResult.landing.finalUrl = processUrl(rs.url)
+
       siteResult.landing.size = rs.content.length
       break
     }
@@ -66,11 +75,14 @@ const getTrancoUrlsWithSignificantContent = async (filepath, contentSize,
     }
 
     const urlsToIgnore = new Set([
-      siteResult.landing,
-      siteResult.landing + '/',
-      siteResult.landing.finalUrl])
+      siteResult.landing.requestedUrl,
+      siteResult.landing.requestedUrl + '/',
+      siteResult.landing.finalUrlRaw,
+      siteResult.landing.finalUrl
+    ])
+
     const allChildUrls = await scrapeLib.getSameSitePageUrls(
-      landingPage, urlsToIgnore)
+      landingPage, urlsToIgnore, stripQueryParams)
     for (const aChildUrl of allChildUrls.values()) {
       if (siteResult.children.length >= maxChildPages) {
         break
@@ -80,9 +92,11 @@ const getTrancoUrlsWithSignificantContent = async (filepath, contentSize,
       if (!childRs) {
         continue
       }
+
       siteResult.children.push({
         requestedUrl: aChildUrl,
-        finalUrl: childRs.url,
+        finalUrlRaw: childRs.url,
+        finalUrl: processUrl(childRs.url),
         size: childRs.content.length
       })
     }

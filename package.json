@@ -1,6 +1,6 @@
 {
   "name": "tranco-sig-sites",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "run.js",
   "scripts": {
     "lint": "npx standard",
@@ -10,7 +10,7 @@
   "license": "ISC",
   "description": "Find domains and child pages on the tranco list that look like actual websites.",
   "dependencies": {
-    "argparse": "^2.0.1",
+    "argparse": "github:pes10k/argparse#avoid-duplicate-default-descriptions",
     "csv-parse": "^5.5.6",
     "puppeteer": "^23.6.1",
     "puppeteer-extra": "^3.3.6",

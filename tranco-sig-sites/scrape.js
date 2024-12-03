@@ -2,6 +2,8 @@ const puppeteerLib = require('puppeteer-extra')
 const stealthPluginLib = require('puppeteer-extra-plugin-stealth')
 const tldtsLib = require('tldts')
 
+const urlsLib = require('./urls')
+
 const __closePage = async (page) => {
   try {
     await page.close()
@@ -50,10 +52,11 @@ const getPageContentForUrl = async (browser, url, timeoutSecs) => {
   return summary
 }
 
-const getSameSitePageUrls = async (page, urlsToIgnore) => {
+const getSameSitePageUrls = async (page, urlsToIgnore, stripQueryParams) => {
+  const processUrl = urlsLib.process.bind(undefined, stripQueryParams)
   let pageSite
   let pageUrl
-  const pageUrlStr = page.url()
+  const pageUrlStr = processUrl(page.url())
   try {
     pageUrl = new URL(pageUrlStr)
     pageSite = tldtsLib.parse(pageUrl.hostname).domain
@@ -71,17 +74,18 @@ const getSameSitePageUrls = async (page, urlsToIgnore) => {
       const hrefValue = await hrefHandle.jsonValue()
       const anchorUrl = new URL(hrefValue, pageUrl)
       const anchorSite = tldtsLib.parse(anchorUrl.hostname).domain
+      const processedAnchorUrlStr = processUrl(anchorUrl.toString())
 
-      if (urlsToIgnore.has(hrefValue)) {
+      if (urlsToIgnore.has(hrefValue) || urlsToIgnore.has(processedAnchorUrlStr)) {
         continue
       }
-      if (hrefValue === pageUrlStr) {
+      if (processedAnchorUrlStr === pageUrlStr) {
         continue
       }
       if (anchorSite !== pageSite) {
         continue
       }
-      sameSiteLinkedUrls.add(hrefValue)
+      sameSiteLinkedUrls.add(processedAnchorUrlStr)
     } catch (e) {
       console.error('getSameSitePageUrls')
       console.error(e)
