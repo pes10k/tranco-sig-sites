@@ -1,6 +1,6 @@
 {
   "name": "tranco-sig-sites",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "main": "run.js",
   "scripts": {
     "lint": "npx standard",
@@ -8,7 +8,7 @@
   },
   "author": "Pete Snyder",
   "license": "ISC",
-  "description": "Find domains and child pages on the tranco list that look like actual websites.",
+  "description": "Find domains and child pages on the Tranco list that look like actual websites.",
   "dependencies": {
     "argparse": "github:pes10k/argparse#avoid-duplicate-default-descriptions",
     "csv-parse": "^5.5.6",

@@ -1,17 +1,13 @@
-const fsLib = require('node:fs/promises')
+const csvParseLib = require('csv-parse')
 
-const csvParseSyncLib = require('csv-parse/sync')
-
-const throwParseError = (filepath, rowNum, colNum, expectedDesc, value) => {
-  const errorMsg = [
-    `Error parsing ${filepath}, row ${rowNum}`,
-    `- Expected to find ${expectedDesc} in column ${colNum}`,
-    `- Found text on row: "${value}"`
-  ]
-  throw new Error(errorMsg.join('\n'))
+const throwParseError = (rowNum, colNum, expectedDesc, value) => {
+  const errorMsg =
+    `Error parsing CSV file, row ${rowNum}\n.` +
+    `Expected to find ${expectedDesc} in col ${colNum}, but found : "${value}"`
+  throw new Error(errorMsg)
 }
 
-const INVALID_DOMAIN_SUBSTRINGS = [
+const invalidDomainSubstrings = [
   '//', '?', '#', ':'
 ]
 
@@ -20,7 +16,7 @@ const INVALID_DOMAIN_SUBSTRINGS = [
 // and that we do see at least one '.' (e.g., its not only a TLD like
 // 'org').
 const validateTrancoDomain = (possibleDomain) => {
-  for (const anUnexpectedSubstring of INVALID_DOMAIN_SUBSTRINGS) {
+  for (const anUnexpectedSubstring of invalidDomainSubstrings) {
     if (possibleDomain.includes(anUnexpectedSubstring)) {
       return false
     }
@@ -31,27 +27,19 @@ const validateTrancoDomain = (possibleDomain) => {
   return true
 }
 
-const recordsFromFile = async (pathToTrancoFile) => {
-  const throwError = throwParseError.bind(undefined, pathToTrancoFile)
-  const fileHandle = await fsLib.open(pathToTrancoFile, 'r')
-  const fileContents = await fileHandle.readFile({
-    encoding: 'utf8'
-  })
-
-  const results = csvParseSyncLib.parse(fileContents)
-  await fileHandle.close()
-
+const recordsFromFile = async (trancoFileReadStream) => {
+  const parser = trancoFileReadStream.pipe(csvParseLib.parse())
   const ranksAndDomains = []
   let rowNum = 0
-  for (const row of results) {
+  for await (const row of parser) {
     const [possibleRank, possibleDomain] = row
     rowNum += 1
     if (Number.isInteger(+possibleRank) === false) {
-      throwError(rowNum, 0, 'domain rank as an integer', row)
+      throwParseError(rowNum, 0, 'domain rank as an integer', row)
     }
 
     if (validateTrancoDomain(possibleDomain) === false) {
-      throwError(rowNum, 1, 'domain', row)
+      throwParseError(rowNum, 1, 'domain', row)
     }
     ranksAndDomains.push([+possibleRank, possibleDomain])
   }

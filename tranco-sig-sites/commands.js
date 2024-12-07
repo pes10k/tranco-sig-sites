@@ -1,9 +1,8 @@
 const scrapeLib = require('./scrape')
 const trancoLib = require('./tranco')
-const urlsLib = require('./urls')
 
 const isPageSignificant = async (minContentSize, timeoutSecs, browser, url) => {
-  const rs = await scrapeLib.getPageContentForUrl(
+  const rs = await scrapeLib.getPageContentForURL(
     browser, url, timeoutSecs)
   if (!rs) {
     return false
@@ -17,98 +16,110 @@ const isPageSignificant = async (minContentSize, timeoutSecs, browser, url) => {
   return rs
 }
 
-const getTrancoUrlsWithSignificantContent = async (filepath, contentSize,
-  limit, maxChildPages, timeoutSecs, strict, headless, stripQueryParams,
-  outputFile) => {
-  const trancoResults = await trancoLib.recordsFromFile(filepath)
-  const processUrl = urlsLib.process.bind(undefined, stripQueryParams)
+const __pageInfoForURL = async (browser, url, contentSize,
+  maxChildPages, timeoutSecs, strict, headless, urlComparisonFunc) => {
+  const isSigFunc = isPageSignificant.bind(undefined,
+    contentSize, timeoutSecs, browser)
 
+  const siteResult = {
+    landing: {
+      requestedUrl: null,
+      finalUrl: null,
+      size: null
+    },
+    children: [],
+    hostname: url.hostname
+  }
+
+  await scrapeLib.closeAllPages(browser)
+  const rs = await isSigFunc(url)
+  if (rs === false) {
+    return null
+  }
+  const landingPage = rs.page
+  siteResult.landing.requestedUrl = url
+  siteResult.landing.finalUrl = rs.url
+  siteResult.landing.size = rs.content.length
+
+  const ignoreURLs = new Set([
+    new URL(siteResult.landing.requestedUrl),
+    new URL(siteResult.landing.finalUrl)
+  ])
+  const childURLs = await scrapeLib.getSameSiteLinkedURLs(
+    landingPage, ignoreURLs, urlComparisonFunc)
+  for (const aChildUrl of childURLs.values()) {
+    if (siteResult.children.length >= maxChildPages) {
+      break
+    }
+    const childRs = await isSigFunc(aChildUrl)
+    if (!childRs) {
+      continue
+    }
+
+    siteResult.children.push({
+      requestedUrl: aChildUrl,
+      finalUrl: childRs.url,
+      size: childRs.content.length
+    })
+  }
+
+  if (strict === true && siteResult.children.length !== maxChildPages) {
+    return null
+  }
+
+  return siteResult
+}
+
+const pageInfoForURL = async (url, contentSize, maxChildPages,
+  timeoutSecs, strict, headless, urlComparisonFunc, outputFile) => {
   const browser = await scrapeLib.launchBrowser(headless)
-  const isSigFunc = isPageSignificant.bind(undefined, contentSize, timeoutSecs,
-    browser)
+  const siteResult = await __pageInfoForURL(browser, url, contentSize,
+    maxChildPages, timeoutSecs, strict, headless, urlComparisonFunc)
+  if (siteResult === null) {
+    return false
+  }
+
+  await outputFile.write(JSON.stringify(siteResult) + '\n')
+  return true
+}
+
+const httpSchemes = [
+  'https://',
+  'http://'
+]
+
+const pageInfoForTrancoFile = async (filepath, contentSize,
+  limit, maxChildPages, timeoutSecs, strict, headless, urlComparisonFunc,
+  outputFile) => {
+  const trancoRecords = await trancoLib.recordsFromFile(filepath)
+  const browser = await scrapeLib.launchBrowser(headless)
 
   let numResults = 0
-  const possibleSchemes = [
-    'https://',
-    'http://'
-  ]
-
-  for (const [rank, site] of trancoResults) {
+  for (const [rank, site] of trancoRecords) {
     if (numResults >= limit) {
       break
     }
 
-    const siteResult = {
-      landing: {
-        requestedUrl: null,
-        finalUrl: null,
-        size: null
-      },
-      children: [],
-      rank,
-      site
-    }
-
-    let landingPage = null
-
-    for (const possibleScheme of possibleSchemes) {
-      const possibleLandingUrl = possibleScheme + site
-      const rs = await isSigFunc(possibleLandingUrl)
-      if (rs === false) {
+    for (const aHTTPScheme of httpSchemes) {
+      const possibleRootURL = new URL(aHTTPScheme + site)
+      const siteResult = await __pageInfoForURL(browser, possibleRootURL,
+        contentSize, maxChildPages, timeoutSecs, strict, headless,
+        urlComparisonFunc)
+      if (siteResult === null) {
         continue
       }
-      landingPage = rs.page
-      siteResult.landing.requestedUrl = possibleLandingUrl
-      siteResult.landing.finalUrlRaw = rs.url
-      siteResult.landing.finalUrl = processUrl(rs.url)
-
-      siteResult.landing.size = rs.content.length
+      siteResult.rank = rank
+      await outputFile.write(JSON.stringify(siteResult) + '\n')
+      numResults += 1
       break
     }
-
-    if (landingPage === null) {
-      await scrapeLib.closeAllPages(browser)
-      continue
-    }
-
-    const urlsToIgnore = new Set([
-      siteResult.landing.requestedUrl,
-      siteResult.landing.requestedUrl + '/',
-      siteResult.landing.finalUrlRaw,
-      siteResult.landing.finalUrl
-    ])
-
-    const allChildUrls = await scrapeLib.getSameSitePageUrls(
-      landingPage, urlsToIgnore, stripQueryParams)
-    for (const aChildUrl of allChildUrls.values()) {
-      if (siteResult.children.length >= maxChildPages) {
-        break
-      }
-      await scrapeLib.closeAllPages(browser)
-      const childRs = await isSigFunc(aChildUrl)
-      if (!childRs) {
-        continue
-      }
-
-      siteResult.children.push({
-        requestedUrl: aChildUrl,
-        finalUrlRaw: childRs.url,
-        finalUrl: processUrl(childRs.url),
-        size: childRs.content.length
-      })
-    }
-
-    if (strict === true && siteResult.children.length !== maxChildPages) {
-      continue
-    }
-
-    await outputFile.write(JSON.stringify(siteResult) + '\n')
-    numResults += 1
   }
 
+  await browser.close()
   return numResults
 }
 
 module.exports = {
-  getTrancoUrlsWithSignificantContent
+  pageInfoForTrancoFile,
+  pageInfoForURL
 }

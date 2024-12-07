@@ -1,3 +1,13 @@
+1.0.2
+---
+Add additional options for controlling if two URLs are treated as the same
+(i.e., --strip-url-schemes, --strip-common-subdomain-prefixes).
+
+Add option for testing a single URL (i.e., --url).
+
+Change CSV parsing to use streams interface.
+
+
 1.0.1
 ---
 
